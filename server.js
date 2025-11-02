@@ -7,6 +7,25 @@ app.use((req, res, next) => {
   next();
 });
 
+// Helper function to get Rolimons item data (includes acronyms)
+async function getRolimonsItemData(assetId) {
+  try {
+    const response = await axios.get('https://www.rolimons.com/itemapi/itemdetails');
+    const data = response.data;
+    
+    if (data.items && data.items[assetId]) {
+      return {
+        acronym: data.items[assetId][3] || null, // Index 3 is acronym
+        name: data.items[assetId][0] || null       // Index 0 is name
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching Rolimons data:', error.message);
+    return null;
+  }
+}
+
 app.get('/inventory/:userId/:assetId', async (req, res) => {
   const { userId, assetId } = req.params;
   
@@ -52,6 +71,7 @@ app.get('/hoarding/:userId', async (req, res) => {
         userId: userId,
         maxCount: 0,
         itemName: "No Items",
+        acronym: null,
         assetId: 0
       });
     }
@@ -80,11 +100,17 @@ app.get('/hoarding/:userId', async (req, res) => {
       }
     }
     
+    // Get acronym from Rolimons
+    const rolimonsData = await getRolimonsItemData(maxAssetId);
+    const acronym = rolimonsData ? rolimonsData.acronym : null;
+    const itemName = itemNames[maxAssetId] || "Unknown";
+    
     res.json({
       success: true,
       userId: userId,
       maxCount: maxCount,
-      itemName: itemNames[maxAssetId] || "Unknown",
+      itemName: itemName,
+      acronym: acronym,
       assetId: maxAssetId
     });
     
@@ -95,6 +121,7 @@ app.get('/hoarding/:userId', async (req, res) => {
       error: error.message,
       maxCount: 0,
       itemName: "Error",
+      acronym: null,
       assetId: 0
     });
   }
