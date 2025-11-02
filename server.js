@@ -7,14 +7,12 @@ app.use((req, res, next) => {
   next();
 });
 
-// Cache for Rolimons data (refresh every 5 minutes)
 let rolimonsCache = null;
 let cacheTime = 0;
 
 async function getRolimonsData() {
   const now = Date.now();
   
-  // Return cache if less than 5 minutes old
   if (rolimonsCache && (now - cacheTime) < 300000) {
     return rolimonsCache;
   }
@@ -27,7 +25,7 @@ async function getRolimonsData() {
     return rolimonsCache;
   } catch (error) {
     console.error('Error fetching Rolimons data:', error.message);
-    return rolimonsCache || { items: {} }; // Return old cache or empty
+    return rolimonsCache || { items: {} };
   }
 }
 
@@ -107,24 +105,21 @@ app.get('/hoarding/:userId', async (req, res) => {
     
     const itemName = itemNames[maxAssetId] || "Unknown";
     
-    // Get Rolimons data for acronym
     const rolimonsData = await getRolimonsData();
     let displayName = itemName;
     
     if (rolimonsData.items && rolimonsData.items[maxAssetId]) {
       const itemData = rolimonsData.items[maxAssetId];
-      const acronym = itemData[3]; // Index 3 is acronym
+      const acronym = itemData[1]; // INDEX 1 is acronym, not 3!
       
-      if (acronym && acronym !== "") {
+      if (acronym && acronym !== "" && typeof acronym === 'string') {
         displayName = acronym;
       } else {
-        // No acronym - shorten name if needed
         if (itemName.length > 18) {
           displayName = itemName.substring(0, 15) + "...";
         }
       }
     } else {
-      // Not in Rolimons - shorten if needed
       if (itemName.length > 18) {
         displayName = itemName.substring(0, 15) + "...";
       }
