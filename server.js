@@ -7,22 +7,27 @@ app.use((req, res, next) => {
   next();
 });
 
-// Helper function to get Rolimons item data (includes acronyms)
-async function getRolimonsItemData(assetId) {
+// Cache for Rolimons data (refresh every 5 minutes)
+let rolimonsCache = null;
+let cacheTime = 0;
+
+async function getRolimonsData() {
+  const now = Date.now();
+  
+  // Return cache if less than 5 minutes old
+  if (rolimonsCache && (now - cacheTime) < 300000) {
+    return rolimonsCache;
+  }
+  
   try {
     const response = await axios.get('https://www.rolimons.com/itemapi/itemdetails');
-    const data = response.data;
-    
-    if (data.items && data.items[assetId]) {
-      return {
-        acronym: data.items[assetId][3] || null, // Index 3 is acronym
-        name: data.items[assetId][0] || null       // Index 0 is name
-      };
-    }
-    return null;
+    rolimonsCache = response.data;
+    cacheTime = now;
+    console.log('Rolimons data refreshed');
+    return rolimonsCache;
   } catch (error) {
     console.error('Error fetching Rolimons data:', error.message);
-    return null;
+    return rolimonsCache || { items: {} }; // Return old cache or empty
   }
 }
 
@@ -71,7 +76,7 @@ app.get('/hoarding/:userId', async (req, res) => {
         userId: userId,
         maxCount: 0,
         itemName: "No Items",
-        acronym: null,
+        displayName: "No Items",
         assetId: 0
       });
     }
@@ -100,17 +105,37 @@ app.get('/hoarding/:userId', async (req, res) => {
       }
     }
     
-    // Get acronym from Rolimons
-    const rolimonsData = await getRolimonsItemData(maxAssetId);
-    const acronym = rolimonsData ? rolimonsData.acronym : null;
     const itemName = itemNames[maxAssetId] || "Unknown";
+    
+    // Get Rolimons data for acronym
+    const rolimonsData = await getRolimonsData();
+    let displayName = itemName;
+    
+    if (rolimonsData.items && rolimonsData.items[maxAssetId]) {
+      const itemData = rolimonsData.items[maxAssetId];
+      const acronym = itemData[3]; // Index 3 is acronym
+      
+      if (acronym && acronym !== "") {
+        displayName = acronym;
+      } else {
+        // No acronym - shorten name if needed
+        if (itemName.length > 18) {
+          displayName = itemName.substring(0, 15) + "...";
+        }
+      }
+    } else {
+      // Not in Rolimons - shorten if needed
+      if (itemName.length > 18) {
+        displayName = itemName.substring(0, 15) + "...";
+      }
+    }
     
     res.json({
       success: true,
       userId: userId,
       maxCount: maxCount,
       itemName: itemName,
-      acronym: acronym,
+      displayName: displayName,
       assetId: maxAssetId
     });
     
@@ -121,7 +146,7 @@ app.get('/hoarding/:userId', async (req, res) => {
       error: error.message,
       maxCount: 0,
       itemName: "Error",
-      acronym: null,
+      displayName: "Error",
       assetId: 0
     });
   }
@@ -130,7 +155,7 @@ app.get('/hoarding/:userId', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({ 
     status: 'online',
-    message: 'Roblox Inventory API is running!',
+    message: 'Roblox Inventory API with Rolimons Acronyms!',
     endpoints: {
       specific: 'GET /inventory/{userId}/{assetId}',
       hoarding: 'GET /hoarding/{userId}'
